@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON File Manager</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌟 JSON File Manager</h1>
+            <p>Browse, edit, and manage JSON files with ease</p>
+        </div>
+
+        <div class="main-content">
+            <div class="folder-section">
+                <div class="path-info">
+                    <label for="folderPath"><strong>Base Path:</strong></label>
+                    <p class="path-description">Current path is loaded from config.env file. To change it, edit the
+                        JSON_MANAGER_BASE_PATH value in config.env and restart the application.</p>
+                    <input type="text" id="folderPath" readonly />
+                </div>
+
+                <div class="filter-section">
+                    <label for="fileExtension"><strong>File Extension Filter:</strong></label>
+                    <input type="text" id="fileExtension" list="extensionOptions"
+                        placeholder="Choose from dropdown or type custom extensions" value="*.golden" />
+                    <datalist id="extensionOptions">
+                        <option value="*.golden">Golden files</option>
+                        <option value="*.json">JSON files</option>
+                    </datalist>
+                    <p class="filter-description">Select from dropdown or type custom extensions. Leave empty for all
+                        files.</p>
+                </div>
+
+                <div class="filter-section">
+                    <label for="jsonKeyFilter"><strong>JSON Key Filter:</strong></label>
+                    <input type="text" id="jsonKeyFilter" 
+                        placeholder="Filter by JSON key name (e.g., 'name', 'id', 'config')" />
+                    <p class="filter-description">Only show files that contain the specified JSON key. Leave empty to show all files.</p>
+                </div>
+
+                <div class="search-section">
+                    <button class="btn btn-primary" onclick="searchFiles()">🔍 Search Files</button>
+                </div>
+
+                <div id="message"></div>
+            </div>
+
+            <div id="filesContainer">
+                <div class="loading">
+                    <p>📁 Configure your base path in config.env and click "Search Files" to get started</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+
+</html>
