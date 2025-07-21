@@ -247,8 +247,38 @@ function displayFileTree(tree) {
     // Set up form event listeners after HTML is added
     setupFormEventListeners();
     
+    // Set up inline copy button listeners
+    setupInlineCopyListeners();
+    
     // Update selection count
     updateSelectionCount();
+}
+
+// Set up inline copy button listeners using event delegation
+function setupInlineCopyListeners() {
+    // Remove any existing listeners to avoid duplicates
+    document.removeEventListener('click', handleInlineCopyClick);
+    
+    // Add event listener for inline copy buttons
+    document.addEventListener('click', handleInlineCopyClick);
+}
+
+// Handle inline copy button clicks
+function handleInlineCopyClick(event) {
+    if (event.target.matches('.inline-copy-btn[data-file-path]') || 
+        event.target.closest('.inline-copy-btn[data-file-path]')) {
+        
+        const button = event.target.matches('.inline-copy-btn[data-file-path]') ? 
+                      event.target : 
+                      event.target.closest('.inline-copy-btn[data-file-path]');
+        
+        const filePath = button.getAttribute('data-file-path');
+        if (filePath) {
+            event.preventDefault();
+            event.stopPropagation();
+            copyJsonToClipboard(filePath);
+        }
+    }
 }
 
 // Set up form event listeners
@@ -291,7 +321,7 @@ function renderTreeNode(node, depth) {
                     <span class="toggle-icon ${isExpanded ? 'expanded' : ''}">${isExpanded ? '▼' : '▶'}</span>
                     <span class="directory-name">📁 ${node.name}</span>
                     <span class="file-count">(${node.count} files)</span>
-                    ${node.basePath ? `<span class="base-path-indicator" title="Base Path: ${node.basePath}">🏠</span>` : ''}
+                    ${node.basePath ? '<span class="base-path-indicator" title="Base Path: ' + node.basePath + '">🏠</span>' : ''}
                 </div>
                 <div class="directory-content" style="display: ${isExpanded ? 'block' : 'none'}">
         `;
@@ -299,18 +329,20 @@ function renderTreeNode(node, depth) {
         // Render files in this directory
         if (hasFiles) {
             node.files.forEach(file => {
+                const fileId = 'file-' + btoa(file.path).replace(/[^a-zA-Z0-9]/g, ''); // Create safe ID
                 html += `
                     <div class="tree-node file" style="margin-left: ${(depth + 1) * 20}px">
                         <div class="file-item">
                             <label class="file-checkbox">
                                 <input type="checkbox" value="${file.path}" onchange="updateSelectionCount()">
                             </label>
-                            <span class="file-name" onclick="loadFileContent('${file.path}')" title="Click to view content">
+                            <span class="file-name" onclick='loadFileContentInline(${JSON.stringify(file.path)}, "${fileId}")' title="Click to view content" style="cursor: pointer;">
                                 📄 ${file.name}
                             </span>
                             <span class="file-path" title="${file.path}">${file.path}</span>
-                            ${file.basePath ? `<span class="file-base-path" title="From: ${file.basePath}">📂</span>` : ''}
+                            ${file.basePath ? '<span class="file-base-path" title="From: ' + file.basePath + '">📂</span>' : ''}
                         </div>
+                        <div id="${fileId}" class="inline-file-content" style="display: none; margin-left: 20px; margin-top: 10px; border-left: 3px solid #3b82f6; padding-left: 15px; background: #f8fafc;"></div>
                     </div>
                 `;
             });
@@ -409,21 +441,121 @@ function getSelectedFiles() {
     });
 }
 
-// Load and display file content
+// Load and display file content inline below the file item
+async function loadFileContentInline(filePath, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) {
+        console.error('Inline container not found:', containerId);
+        return;
+    }
+    
+    try {
+        // Toggle visibility - if already shown, hide it
+        if (container.style.display === 'block') {
+            container.style.display = 'none';
+            return;
+        }
+        
+        showMessage('📖 Loading file content...', 'info');
+        
+        // Check if the function is available
+        if (typeof window.getJSONFileContent !== 'function') {
+            throw new Error('getJSONFileContent function not available. Please ensure the application is properly loaded.');
+        }
+        
+        console.log('Loading file:', filePath);
+        
+        const content = await window.getJSONFileContent(filePath);
+        console.log('File content loaded successfully, length:', content.length);
+        
+        // Display content inline
+        displayFileContentInline(filePath, content, container);
+        container.style.display = 'block';
+        
+        showMessage('✅ File loaded successfully', 'success');
+        
+    } catch (error) {
+        console.error('File loading error:', error);
+        
+        // Show error in the inline container
+        container.innerHTML = `
+            <div style="color: #dc2626; padding: 10px; background: #fee2e2; border-radius: 6px;">
+                ❌ Error loading file: ${String(error.message || error)}
+            </div>
+        `;
+        container.style.display = 'block';
+        
+        showMessage(`❌ Cannot load file: ${String(error.message || error)}`, 'error');
+    }
+}
+
+// Legacy function for backward compatibility (if needed elsewhere)
 async function loadFileContent(filePath) {
     try {
         showMessage('📖 Loading file content...', 'info');
         
+        // Check if the function is available
+        if (typeof window.getJSONFileContent !== 'function') {
+            throw new Error('getJSONFileContent function not available. Please ensure the application is properly loaded.');
+        }
+        
+        console.log('Loading file:', filePath);
+        console.log('Path type:', typeof filePath);
+        console.log('Path length:', filePath.length);
+        console.log('Raw path characters:', filePath.split('').map(c => c.charCodeAt(0)));
+        
         const content = await window.getJSONFileContent(filePath);
+        console.log('File content loaded successfully, length:', content.length);
+        
         displayFileContent(filePath, content);
+        showMessage('✅ File loaded successfully', 'success');
         
     } catch (error) {
-        showMessage('❌ Error loading file: ' + error.message, 'error');
         console.error('File loading error:', error);
+        console.error('Error details:', {
+            message: error.message,
+            filePath: filePath,
+            functionAvailable: typeof window.getJSONFileContent
+        });
+        
+        // Provide more specific error messages
+        let errorMessage = String(error.message || error);
+        if (errorMessage.includes('file too large')) {
+            errorMessage = 'File is too large to load (max 10MB)';
+        } else if (errorMessage.includes('invalid JSON')) {
+            errorMessage = 'File contains invalid JSON format';
+        } else if (errorMessage.includes('no such file')) {
+            errorMessage = 'File not found or access denied';
+        } else if (errorMessage.includes('not available')) {
+            errorMessage = 'Application not properly initialized. Please refresh the page.';
+        }
+        
+        showMessage(`❌ Cannot load file: ${errorMessage}`, 'error');
     }
 }
 
-// Display file content with syntax highlighting
+// Display file content inline in the provided container
+function displayFileContentInline(filePath, content, container) {
+    const formattedContent = formatJsonContent(content);
+    const fileName = filePath.split(/[\\\/]/).pop();
+    
+    container.innerHTML = `
+        <div style="background: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #e5e7eb; padding-bottom: 10px;">
+                <h4 style="margin: 0; color: #374151;">📄 ${fileName}</h4>
+                <button class="inline-copy-btn" data-file-path="${filePath}" 
+                        style="padding: 4px 8px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                    📋 Copy
+                </button>
+            </div>
+            <div style="max-height: 400px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 12px;">
+                ${formattedContent}
+            </div>
+        </div>
+    `;
+}
+
+// Display file content with syntax highlighting (legacy function for separate container)
 function displayFileContent(filePath, content) {
     const contentContainer = document.getElementById('file-content');
     
@@ -434,11 +566,14 @@ function displayFileContent(filePath, content) {
     
     const formattedContent = formatJsonContent(content);
     
+    // Show the container
+    contentContainer.style.display = 'block';
+    
     contentContainer.innerHTML = `
         <div class="file-content-header">
             <h3>📄 ${filePath.split(/[\\\/]/).pop()}</h3>
             <div class="file-actions">
-                <button onclick="copyJsonToClipboard('${filePath}')" class="copy-btn">
+                <button onclick="copyJsonToClipboard(${JSON.stringify(filePath)})" class="copy-btn">
                     📋 Copy to Clipboard
                 </button>
             </div>
@@ -498,6 +633,22 @@ async function copyJsonToClipboard(filePath) {
         const content = await window.getJSONFileContent(filePath);
         await navigator.clipboard.writeText(content);
         showMessage('✅ Content copied to clipboard', 'success');
+        
+        // Find any copy buttons for this file and briefly change their text
+        const copyButtons = document.querySelectorAll(`[data-file-path="${filePath}"]`);
+        copyButtons.forEach(button => {
+            if (button.textContent.includes('Copy')) {
+                const originalText = button.textContent;
+                button.textContent = '✅ Copied!';
+                button.style.background = '#10b981';
+                
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.style.background = '#3b82f6';
+                }, 2000);
+            }
+        });
+        
     } catch (error) {
         showMessage('❌ Failed to copy content: ' + error.message, 'error');
     }

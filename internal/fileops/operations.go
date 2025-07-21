@@ -37,9 +37,11 @@ func GetJSONFileContent(filePath string) (string, error) {
 		return "", fmt.Errorf("error reading file: %v", err)
 	}
 
-	// Validate JSON format
-	if err := validateJSON(string(content)); err != nil {
-		return "", fmt.Errorf("invalid JSON content: %v", err)
+	// Validate JSON format only for .json files
+	if strings.HasSuffix(strings.ToLower(filePath), ".json") || strings.HasSuffix(strings.ToLower(filePath), ".golden") {
+		if err := validateJSON(string(content)); err != nil {
+			return "", fmt.Errorf("invalid JSON content: %v", err)
+		}
 	}
 
 	return string(content), nil

@@ -166,7 +166,24 @@ func (a *App) BrowseFolder(extensionFilter, jsonKeyFilter string) (*tree.FileTre
 
 // GetJSONFileContent returns the content of a JSON file
 func (a *App) GetJSONFileContent(filePath string) (string, error) {
-	return fileops.GetJSONFileContent(filePath)
+	start := time.Now()
+
+	log.Printf("📖 Loading file content: %s", filePath)
+
+	content, err := fileops.GetJSONFileContent(filePath)
+
+	a.logOperation("GetJSONFileContent", time.Since(start), err, map[string]interface{}{
+		"filePath":      filePath,
+		"contentLength": len(content),
+	})
+
+	if err != nil {
+		log.Printf("❌ Failed to load file content: %v", err)
+		return "", err
+	}
+
+	log.Printf("✅ File content loaded successfully, length: %d", len(content))
+	return content, nil
 }
 
 // AddJSONItemToFiles adds a JSON item to multiple files
