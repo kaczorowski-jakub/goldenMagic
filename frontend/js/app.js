@@ -1,261 +1,536 @@
-let currentFiles = [];
+// Global variables
+let currentFileTree = null;
+let allFiles = [];
+let searchTimeout = null; // For debouncing
 
+// Debounce utility function
+function debounce(func, wait) {
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(searchTimeout);
+            func(...args);
+        };
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(later, wait);
+    };
+}
+
+// Enhanced error handling
+function handleError(error, context = 'Operation') {
+    console.error(`${context} error:`, error);
+    
+    let errorMessage = error.message || 'Unknown error occurred';
+    
+    // Provide more user-friendly error messages
+    if (errorMessage.includes('file too large')) {
+        errorMessage = '📁 File is too large to process (max 10MB)';
+    } else if (errorMessage.includes('invalid JSON')) {
+        errorMessage = '❌ Invalid JSON format detected';
+    } else if (errorMessage.includes('no valid base paths')) {
+        errorMessage = '📂 No valid directories found in configuration';
+    } else if (errorMessage.includes('target key') && errorMessage.includes('not found')) {
+        errorMessage = '🔍 Target key not found in selected files';
+    }
+    
+    showMessage(`❌ ${context}: ${errorMessage}`, 'error');
+}
+
+// Initialize the application
+async function initializeApp() {
+    try {
+        // Load and display base paths
+        await loadBasePaths();
+        
+        // Set up event listeners with debouncing
+        setupEventListeners();
+        
+        showMessage('✅ Application initialized successfully', 'success');
+    } catch (error) {
+        handleError(error, 'Initialization failed');
+    }
+}
+
+// Enhanced search with debouncing
+const debouncedSearch = debounce(async () => {
+    try {
+        await searchFiles();
+    } catch (error) {
+        handleError(error, 'Search failed');
+    }
+}, 500); // 500ms delay
+
+// Load and display base paths
+async function loadBasePaths() {
+    try {
+        const basePaths = await window.getBasePaths();
+        displayBasePaths(basePaths);
+    } catch (error) {
+        handleError(error, 'Loading base paths failed');
+    }
+}
+
+// Display base paths in the UI
+function displayBasePaths(basePaths) {
+    const pathsContainer = document.getElementById('base-paths-list');
+    const pathsCount = document.getElementById('paths-count');
+    
+    if (!pathsContainer || !pathsCount) {
+        console.error('Base paths container elements not found');
+        return;
+    }
+    
+    // Update count
+    pathsCount.textContent = basePaths.length;
+    
+    // Clear existing content
+    pathsContainer.innerHTML = '';
+    
+    if (basePaths.length === 0) {
+        pathsContainer.innerHTML = '<div class="no-paths">No base paths configured</div>';
+        return;
+    }
+    
+    // Create path elements
+    basePaths.forEach((path, index) => {
+        const pathElement = document.createElement('div');
+        pathElement.className = 'base-path-item';
+        pathElement.innerHTML = `
+            <div class="path-info">
+                <span class="path-number">${index + 1}.</span>
+                <span class="path-text" title="${path}">${path}</span>
+            </div>
+        `;
+        pathsContainer.appendChild(pathElement);
+    });
+}
+
+// Set up event listeners
+function setupEventListeners() {
+    // Search button
+    const searchBtn = document.getElementById('searchBtn');
+    if (searchBtn) {
+        searchBtn.addEventListener('click', searchFiles);
+    }
+    
+    // Enter key in filter inputs
+    const extensionFilter = document.getElementById('fileExtension');
+    const jsonKeyFilter = document.getElementById('jsonKeyFilter');
+    
+    if (extensionFilter) {
+        extensionFilter.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchFiles();
+            }
+        });
+    }
+    
+    if (jsonKeyFilter) {
+        jsonKeyFilter.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchFiles();
+            }
+        });
+    }
+}
+
+// Enhanced search function with better error handling
 async function searchFiles() {
-    const folderPath = document.getElementById('folderPath').value.trim();
-    const fileExtensionInput = document.getElementById('fileExtension').value.trim();
+    const extensionFilter = document.getElementById('fileExtension').value.trim();
     const jsonKeyFilter = document.getElementById('jsonKeyFilter').value.trim();
     
-    if (!folderPath) {
-        showMessage('Base path not configured. Please check config.env file.', 'error');
-        return;
-    }
-
-    document.getElementById('filesContainer').innerHTML = '<div class="loading"><p>🔍 Searching for files...</p></div>';
-
-    try {
-        // Pass both extension and JSON key filters to the backend
-        const rootNode = await window.browseFolder(folderPath, fileExtensionInput, jsonKeyFilter);
-        
-        currentFiles = rootNode.allFiles;
-        displayFileTree(rootNode);
-        
-        const fileType = fileExtensionInput || 'all';
-        const keyFilter = jsonKeyFilter ? ` with key "${jsonKeyFilter}"` : '';
-        showMessage(`Found ${rootNode.count} files matching: ${fileType}${keyFilter}`, 'success');
-    } catch (error) {
-        showMessage('Error searching files: ' + error.message, 'error');
-        document.getElementById('filesContainer').innerHTML = '<div class="loading"><p>❌ Error searching files</p></div>';
-    }
-}
-
-function showMessage(message, type = 'info') {
-    const messageDiv = document.getElementById('message');
-    messageDiv.innerHTML = '<div class="' + (type === 'error' ? 'error' : 'success') + '">' + message + '</div>';
-    setTimeout(() => {
-        messageDiv.innerHTML = '';
-    }, 5000);
-}
-
-function displayFileTree(rootNode) {
-    const container = document.getElementById('filesContainer');
+    // Show loading state
+    const searchBtn = document.getElementById('searchBtn');
+    const originalText = searchBtn.textContent;
+    searchBtn.textContent = '🔍 Searching...';
+    searchBtn.disabled = true;
     
-    if (rootNode.count === 0) {
-        container.innerHTML = '<div class="loading"><p>📄 No files found matching the specified criteria</p></div>';
-        return;
+    try {
+        showMessage('🔍 Searching files...', 'info');
+        
+        const fileTree = await window.browseFolder(extensionFilter, jsonKeyFilter);
+        
+        if (!fileTree) {
+            throw new Error('No results returned from search');
+        }
+        
+        currentFileTree = fileTree;
+        allFiles = flattenFileTree(fileTree);
+        
+        displayFileTree(fileTree);
+        
+        const count = fileTree.count || 0;
+        if (count === 0) {
+            showMessage('📂 No files found matching your criteria', 'warning');
+        } else {
+            showMessage(`✅ Found ${count} file${count !== 1 ? 's' : ''} matching your criteria`, 'success');
+        }
+        
+    } catch (error) {
+        handleError(error, 'Search operation failed');
+        // Clear results on error
+        document.getElementById('file-tree').innerHTML = '<div class="no-results">Search failed. Please try again.</div>';
+    } finally {
+        // Reset button state
+        searchBtn.textContent = originalText;
+        searchBtn.disabled = false;
     }
-
-    const treeHTML = '<div class="file-tree">' +
-        '<div class="tree-header">' +
-            '<h3>📁 ' + rootNode.name + ' (' + rootNode.count + ' files)</h3>' +
-            '<button class="btn btn-secondary mass-update-btn" onclick="toggleMassUpdateForm()">📝 Mass Update All Files</button>' +
-        '</div>' +
-        '<div id="mass-update-form" class="mass-update-form" style="display: none;">' +
-            '<h4>🚀 Add JSON Item to All ' + rootNode.count + ' Files</h4>' +
-            '<div class="form-row">' +
-                '<input type="text" id="mass-object-path" placeholder="Object path (e.g., user.address or leave empty for root)" />' +
-                '<input type="text" id="mass-key" placeholder="Key name" />' +
-            '</div>' +
-            '<textarea id="mass-value" placeholder="Value (JSON format, e.g., &quot;string&quot;, 123, {&quot;nested&quot;: true})"></textarea>' +
-            '<div class="mass-update-buttons">' +
-                '<button class="btn btn-primary" onclick="performMassUpdate()">🔄 Update All Files</button>' +
-                '<button class="btn" onclick="toggleMassUpdateForm()">Cancel</button>' +
-            '</div>' +
-        '</div>' +
-        renderTreeNode(rootNode, 0) +
-        '</div>';
-
-    container.innerHTML = treeHTML;
 }
 
+// Display file tree with multiple paths support
+function displayFileTree(tree) {
+    const resultsContainer = document.getElementById('results');
+    
+    if (!tree || tree.count === 0) {
+        resultsContainer.innerHTML = `
+            <div class="no-results">
+                <h3>No Results Found</h3>
+                <p>Try adjusting your search filters or check your base paths configuration.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Create tree header with controls
+    const headerHTML = `
+        <div class="tree-header">
+            <h3>${tree.name} (${tree.count} files)</h3>
+            <div class="header-controls">
+                <div class="selection-controls">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="select-all-files" onchange="toggleAllFiles()">
+                        Select All (<span id="selected-count">0</span>)
+                    </label>
+                </div>
+                <div class="action-buttons">
+                    <button id="mass-update-btn" class="action-btn primary" onclick="toggleMassUpdateForm()">
+                        Add to Selected
+                    </button>
+                    <button id="insert-after-btn" class="action-btn secondary" onclick="toggleInsertAfterForm()">
+                        Add after Selected
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div id="mass-update-form" class="mass-update-form" style="display: none;">
+            <h4>➕ Add Property to Selected Files</h4>
+            <div class="form-row">
+                <input type="text" id="mass-object-path" placeholder="Object path (e.g., user.address or leave empty for root)" />
+                <input type="text" id="mass-key" placeholder="Key name" />
+            </div>
+            <p class="form-help">💡 This will add the property as the FIRST item in the target objects.</p>
+            <textarea id="mass-value" placeholder="Value (JSON format, e.g., &quot;string&quot;, 123, {&quot;nested&quot;: true})"></textarea>
+            <div class="mass-update-buttons">
+                <button id="perform-mass-update" class="btn btn-primary">➕ Add to Selected Files</button>
+                <button id="cancel-mass-update" class="btn">Cancel</button>
+            </div>
+        </div>
+        <div id="insert-after-form" class="mass-update-form" style="display: none;">
+            <h4>📝 Add Object After Target</h4>
+            <div class="form-row">
+                <input type="text" id="target-object-key" placeholder="Target object key (to insert after)" />
+                <input type="text" id="new-object-key" placeholder="New object key name" />
+            </div>
+            <p class="form-help">💡 This will add a complete JSON object AFTER ALL OCCURRENCES of the specified target key. If the target key appears multiple times in a file, the new object will be added after each occurrence.</p>
+            <textarea id="new-object-json" placeholder="New object JSON (e.g., {&quot;name&quot;: &quot;value&quot;, &quot;nested&quot;: {&quot;key&quot;: true}})"></textarea>
+            <div class="mass-update-buttons">
+                <button id="perform-insert-after" class="btn btn-primary">📝 Add After Target</button>
+                <button id="cancel-insert-after" class="btn">Cancel</button>
+            </div>
+        </div>
+    `;
+    
+    // Create tree content
+    const treeHTML = renderTreeNode(tree, 0);
+    
+    resultsContainer.innerHTML = headerHTML + '<div class="tree-container">' + treeHTML + '</div>';
+    
+    // Set up form event listeners after HTML is added
+    setupFormEventListeners();
+    
+    // Update selection count
+    updateSelectionCount();
+}
+
+// Set up form event listeners
+function setupFormEventListeners() {
+    const performMassUpdateBtn = document.getElementById('perform-mass-update');
+    if (performMassUpdateBtn) {
+        performMassUpdateBtn.addEventListener('click', performMassUpdate);
+    }
+    
+    const performInsertAfterBtn = document.getElementById('perform-insert-after');
+    if (performInsertAfterBtn) {
+        performInsertAfterBtn.addEventListener('click', performInsertAfter);
+    }
+    
+    const cancelMassUpdateBtn = document.getElementById('cancel-mass-update');
+    if (cancelMassUpdateBtn) {
+        cancelMassUpdateBtn.addEventListener('click', toggleMassUpdateForm);
+    }
+    
+    const cancelInsertAfterBtn = document.getElementById('cancel-insert-after');
+    if (cancelInsertAfterBtn) {
+        cancelInsertAfterBtn.addEventListener('click', toggleInsertAfterForm);
+    }
+}
+
+// Render a tree node (supports multiple base paths)
 function renderTreeNode(node, depth) {
-    let html = '';
     const indent = '  '.repeat(depth);
+    let html = '';
     
     if (node.isDir) {
-        // Render directory
-        const hasContent = (node.children && node.children.length > 0) || (node.files && node.files.length > 0);
-        if (hasContent) {
-            html += '<div class="tree-folder" style="margin-left: ' + (depth * 20) + 'px;">' +
-                '<span class="folder-toggle" onclick="toggleFolder(this)">📁</span> ' +
-                '<span class="folder-name">' + node.name + '</span>' +
-                '<div class="folder-content" style="display: block;">';
-            
-            // Render files in this directory
-            if (node.files && node.files.length > 0) {
-                node.files.forEach((file, index) => {
-                    const globalIndex = currentFiles.findIndex(f => f.path === file.path);
-                    html += '<div class="tree-file" style="margin-left: ' + ((depth + 1) * 20) + 'px;">' +
-                        '<div class="file-item">' +
-                            '<span class="file-icon">📄</span> ' +
-                            '<span class="file-name">' + file.name + '</span>' +
-                            '<button class="btn btn-small file-action-btn" onclick="loadFileContent(' + globalIndex + ')">View</button>' +
-                        '</div>' +
-                        '<div class="file-path">' + file.path + '</div>' +
-                        '<div id="content-' + globalIndex + '" class="file-content" style="display: none;"></div>' +
-                        '</div>';
-                });
-            }
-            
-            // Render subdirectories
-            if (node.children && node.children.length > 0) {
-                node.children.forEach(child => {
-                    html += renderTreeNode(child, depth + 1);
-                });
-            }
-            
-            html += '</div></div>';
+        // Directory node
+        const hasFiles = node.files && node.files.length > 0;
+        const hasChildren = node.children && node.children.length > 0;
+        const isExpanded = depth < 2; // Auto-expand first two levels
+        
+        html += `
+            <div class="tree-node directory" style="margin-left: ${depth * 20}px">
+                <div class="directory-header" onclick="toggleDirectory(this)">
+                    <span class="toggle-icon ${isExpanded ? 'expanded' : ''}">${isExpanded ? '▼' : '▶'}</span>
+                    <span class="directory-name">📁 ${node.name}</span>
+                    <span class="file-count">(${node.count} files)</span>
+                    ${node.basePath ? `<span class="base-path-indicator" title="Base Path: ${node.basePath}">🏠</span>` : ''}
+                </div>
+                <div class="directory-content" style="display: ${isExpanded ? 'block' : 'none'}">
+        `;
+        
+        // Render files in this directory
+        if (hasFiles) {
+            node.files.forEach(file => {
+                html += `
+                    <div class="tree-node file" style="margin-left: ${(depth + 1) * 20}px">
+                        <div class="file-item">
+                            <label class="file-checkbox">
+                                <input type="checkbox" value="${file.path}" onchange="updateSelectionCount()">
+                            </label>
+                            <span class="file-name" onclick="loadFileContent('${file.path}')" title="Click to view content">
+                                📄 ${file.name}
+                            </span>
+                            <span class="file-path" title="${file.path}">${file.path}</span>
+                            ${file.basePath ? `<span class="file-base-path" title="From: ${file.basePath}">📂</span>` : ''}
+                        </div>
+                    </div>
+                `;
+            });
         }
+        
+        // Render subdirectories
+        if (hasChildren) {
+            node.children.forEach(child => {
+                html += renderTreeNode(child, depth + 1);
+            });
+        }
+        
+        html += `
+                </div>
+            </div>
+        `;
     }
     
     return html;
 }
 
-function toggleFolder(element) {
-    const folderContent = element.parentElement.querySelector('.folder-content');
-    const isOpen = folderContent.style.display !== 'none';
+// Flatten file tree to get all files
+function flattenFileTree(node) {
+    let files = [];
     
-    if (isOpen) {
-        folderContent.style.display = 'none';
-        element.textContent = '📂';
+    if (!node) return files;
+    
+    // Add files from current node
+    if (node.files) {
+        files = files.concat(node.files);
+    }
+    
+    // Recursively add files from children
+    if (node.children) {
+        node.children.forEach(child => {
+            files = files.concat(flattenFileTree(child));
+        });
+    }
+    
+    return files;
+}
+
+// Toggle directory expansion
+function toggleDirectory(element) {
+    const toggleIcon = element.querySelector('.toggle-icon');
+    const content = element.parentElement.querySelector('.directory-content');
+    
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        toggleIcon.textContent = '▼';
+        toggleIcon.classList.add('expanded');
     } else {
-        folderContent.style.display = 'block';
-        element.textContent = '📁';
+        content.style.display = 'none';
+        toggleIcon.textContent = '▶';
+        toggleIcon.classList.remove('expanded');
     }
 }
 
-// Keep the old displayFiles function for backward compatibility if needed
-function displayFiles(files) {
-    const container = document.getElementById('filesContainer');
+// Toggle all files selection
+function toggleAllFiles() {
+    const selectAllCheckbox = document.getElementById('select-all-files');
+    const fileCheckboxes = document.querySelectorAll('.file-checkbox input[type="checkbox"]');
     
-    if (files.length === 0) {
-        container.innerHTML = '<div class="loading"><p>📄 No files found matching the specified criteria</p></div>';
+    fileCheckboxes.forEach(checkbox => {
+        checkbox.checked = selectAllCheckbox.checked;
+    });
+    
+    updateSelectionCount();
+}
+
+// Update selection count display
+function updateSelectionCount() {
+    const selectedCheckboxes = document.querySelectorAll('.file-checkbox input[type="checkbox"]:checked');
+    const selectedCount = selectedCheckboxes.length;
+    const totalCount = document.querySelectorAll('.file-checkbox input[type="checkbox"]').length;
+    
+    const selectedCountElement = document.getElementById('selected-count');
+    if (selectedCountElement) {
+        selectedCountElement.textContent = selectedCount;
+    }
+    
+    const selectAllCheckbox = document.getElementById('select-all-files');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.checked = selectedCount === totalCount && totalCount > 0;
+        selectAllCheckbox.indeterminate = selectedCount > 0 && selectedCount < totalCount;
+    }
+}
+
+// Get selected files
+function getSelectedFiles() {
+    const selectedCheckboxes = document.querySelectorAll('.file-checkbox input[type="checkbox"]:checked');
+    return Array.from(selectedCheckboxes).map(checkbox => {
+        const filePath = checkbox.value;
+        const fileName = checkbox.closest('.file-item').querySelector('.file-name').textContent.replace('📄 ', '');
+        return { path: filePath, name: fileName };
+    });
+}
+
+// Load and display file content
+async function loadFileContent(filePath) {
+    try {
+        showMessage('📖 Loading file content...', 'info');
+        
+        const content = await window.getJSONFileContent(filePath);
+        displayFileContent(filePath, content);
+        
+    } catch (error) {
+        showMessage('❌ Error loading file: ' + error.message, 'error');
+        console.error('File loading error:', error);
+    }
+}
+
+// Display file content with syntax highlighting
+function displayFileContent(filePath, content) {
+    const contentContainer = document.getElementById('file-content');
+    
+    if (!contentContainer) {
+        console.error('File content container not found');
         return;
     }
-
-    const filesHTML = files.map((file, index) => {
-        return '<div class="file-card">' +
-            '<div class="file-header">' +
-                '<div class="file-name">📄 ' + file.name + '</div>' +
-            '</div>' +
-            '<div class="file-path">' + file.path + '</div>' +
-            '<div class="file-actions">' +
-                '<button class="btn btn-small" onclick="loadFileContent(' + index + ')">View Content</button>' +
-            '</div>' +
-            '<div id="content-' + index + '" class="file-content" style="display: none;"></div>' +
-        '</div>';
-    }).join('');
-
-    container.innerHTML = '<div class="files-grid">' + filesHTML + '</div>';
+    
+    const formattedContent = formatJsonContent(content);
+    
+    contentContainer.innerHTML = `
+        <div class="file-content-header">
+            <h3>📄 ${filePath.split(/[\\\/]/).pop()}</h3>
+            <div class="file-actions">
+                <button onclick="copyJsonToClipboard('${filePath}')" class="copy-btn">
+                    📋 Copy to Clipboard
+                </button>
+            </div>
+        </div>
+        <div class="file-path-info">
+            <strong>Path:</strong> ${filePath}
+        </div>
+        <div class="json-content">
+            ${formattedContent}
+        </div>
+    `;
+    
+    // Scroll to content
+    contentContainer.scrollIntoView({ behavior: 'smooth' });
+    
+    showMessage('✅ File content loaded successfully', 'success');
 }
 
-async function loadFileContent(fileIndex) {
-    const file = currentFiles[fileIndex];
-    const contentDiv = document.getElementById('content-' + fileIndex);
-    
-    if (contentDiv.style.display === 'none') {
-        try {
-            contentDiv.innerHTML = '<div class="loading-content">📄 Loading file content...</div>';
-            contentDiv.style.display = 'block';
-            
-            const content = await window.getJSONFileContent(file.path);
-            const beautifulJson = formatJsonContent(content);
-            contentDiv.innerHTML = beautifulJson;
-        } catch (error) {
-            contentDiv.innerHTML = '<div class="error">❌ Error loading file: ' + error.message + '</div>';
-            contentDiv.style.display = 'block';
-        }
-    } else {
-        contentDiv.style.display = 'none';
+// Format JSON content with syntax highlighting and line numbers
+function formatJsonContent(jsonString) {
+    try {
+        const parsed = JSON.parse(jsonString);
+        const formatted = JSON.stringify(parsed, null, 2);
+        const lines = formatted.split('\n');
+        
+        let result = '<div class="json-lines">';
+        lines.forEach((line, index) => {
+            const lineNumber = index + 1;
+            const highlightedLine = highlightJsonSyntax(line);
+            result += `<div class="json-line">`;
+            result += `<span class="line-number">${lineNumber}</span>`;
+            result += `<span class="line-content">${highlightedLine}</span>`;
+            result += `</div>`;
+        });
+        result += '</div>';
+        
+        return result;
+    } catch (error) {
+        return `<pre class="json-error">Invalid JSON: ${error.message}</pre>`;
     }
 }
 
-function formatJsonContent(jsonObject) {
-    const jsonString = JSON.stringify(jsonObject, null, 2);
-    
-    // Create a beautiful formatted JSON display
-    const lines = jsonString.split('\n');
-    let html = '<div class="json-display">';
-    html += '<div class="json-header">';
-    html += '<span class="json-title">📄 JSON Content</span>';
-    html += '<button class="copy-btn" onclick="copyJsonToClipboard(this)" title="Copy to clipboard">📋 Copy</button>';
-    html += '</div>';
-    html += '<div class="json-content">';
-    html += '<pre class="json-code">';
-    
-    lines.forEach((line, index) => {
-        const lineNumber = (index + 1).toString().padStart(3, ' ');
-        const indentLevel = (line.match(/^\s*/)[0].length / 2);
-        const trimmedLine = line.trim();
-        
-        let coloredLine = trimmedLine;
-        
-        // Color different JSON elements
-        coloredLine = coloredLine.replace(/"([^"]+)":/g, '<span class="json-key">"$1"</span>:');
-        coloredLine = coloredLine.replace(/:\s*"([^"]*)"([,}]?)/g, ': <span class="json-string">"$1"</span>$2');
-        coloredLine = coloredLine.replace(/:\s*(\d+\.?\d*)([,}]?)/g, ': <span class="json-number">$1</span>$2');
-        coloredLine = coloredLine.replace(/:\s*(true|false)([,}]?)/g, ': <span class="json-boolean">$1</span>$2');
-        coloredLine = coloredLine.replace(/:\s*(null)([,}]?)/g, ': <span class="json-null">$1</span>$2');
-        coloredLine = coloredLine.replace(/([{}\[\]])/g, '<span class="json-bracket">$1</span>');
-        
-        html += '<span class="json-line">';
-        html += '<span class="line-number">' + lineNumber + '</span>';
-        html += '<span class="line-content" style="padding-left: ' + (indentLevel * 20) + 'px;">' + coloredLine + '</span>';
-        html += '</span>';
-    });
-    
-    html += '</pre>';
-    html += '</div>';
-    html += '<div class="json-stats">';
-    html += '<span>📊 ' + Object.keys(jsonObject).length + ' root properties</span>';
-    html += '<span>📏 ' + lines.length + ' lines</span>';
-    html += '<span>💾 ' + new Blob([jsonString]).size + ' bytes</span>';
-    html += '</div>';
-    html += '</div>';
-    
-    return html;
+// Highlight JSON syntax
+function highlightJsonSyntax(line) {
+    return line
+        .replace(/(".*?")(\s*:)/g, '<span class="json-key">$1</span>$2')
+        .replace(/:\s*(".*?")/g, ': <span class="json-string">$1</span>')
+        .replace(/:\s*(true|false)/g, ': <span class="json-boolean">$1</span>')
+        .replace(/:\s*(null)/g, ': <span class="json-null">$1</span>')
+        .replace(/:\s*(-?\d+\.?\d*)/g, ': <span class="json-number">$1</span>')
+        .replace(/([{}[\],])/g, '<span class="json-punctuation">$1</span>');
 }
 
-function copyJsonToClipboard(button) {
-    const jsonContent = button.closest('.json-display').querySelector('.json-code').textContent;
-    navigator.clipboard.writeText(jsonContent).then(() => {
-        const originalText = button.textContent;
-        button.textContent = '✅ Copied!';
-        button.style.backgroundColor = '#10b981';
-        setTimeout(() => {
-            button.textContent = originalText;
-            button.style.backgroundColor = '';
-        }, 2000);
-    }).catch(err => {
-        console.error('Failed to copy: ', err);
-        button.textContent = '❌ Failed';
-        setTimeout(() => {
-            button.textContent = '📋 Copy';
-        }, 2000);
-    });
+// Copy JSON content to clipboard
+async function copyJsonToClipboard(filePath) {
+    try {
+        const content = await window.getJSONFileContent(filePath);
+        await navigator.clipboard.writeText(content);
+        showMessage('✅ Content copied to clipboard', 'success');
+    } catch (error) {
+        showMessage('❌ Failed to copy content: ' + error.message, 'error');
+    }
 }
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
+// Mass update functionality
 function toggleMassUpdateForm() {
     const form = document.getElementById('mass-update-form');
-    if (form.style.display === 'none') {
+    const isVisible = form.style.display === 'block';
+    
+    if (isVisible) {
+        form.style.display = 'none';
+    } else {
         form.style.display = 'block';
         
-        // Auto-populate object path with current JSON key filter
+        // Auto-populate object path from JSON key filter
         const jsonKeyFilter = document.getElementById('jsonKeyFilter').value.trim();
-        if (jsonKeyFilter) {
-            document.getElementById('mass-object-path').value = jsonKeyFilter;
+        const objectPathInput = document.getElementById('mass-object-path');
+        if (jsonKeyFilter && objectPathInput) {
+            objectPathInput.value = jsonKeyFilter;
         }
-    } else {
-        form.style.display = 'none';
-        // Clear form when closing
-        document.getElementById('mass-object-path').value = '';
-        document.getElementById('mass-key').value = '';
-        document.getElementById('mass-value').value = '';
+        
+        // Focus on the first input
+        const firstInput = form.querySelector('input');
+        if (firstInput) {
+            firstInput.focus();
+        }
+        
+        // Hide insert after form if open
+        const insertAfterForm = document.getElementById('insert-after-form');
+        if (insertAfterForm && insertAfterForm.style.display === 'block') {
+            insertAfterForm.style.display = 'none';
+        }
     }
 }
 
@@ -273,16 +548,17 @@ async function performMassUpdate() {
         // Parse the value as JSON
         const value = JSON.parse(valueStr);
         
-        // Get all file paths from currentFiles
-        const filePaths = currentFiles.map(file => file.path);
+        // Get selected file paths
+        const selectedFiles = getSelectedFiles();
+        const filePaths = selectedFiles.map(file => file.path);
         
         if (filePaths.length === 0) {
-            showMessage('❌ No files to update', 'error');
+            showMessage('❌ No files selected for update', 'error');
             return;
         }
 
         // Show progress message
-        showMessage(`🔄 Updating ${filePaths.length} files...`, 'info');
+        showMessage(`➕ Adding property to ${filePaths.length} files across multiple paths...`, 'info');
         
         // Call the backend function
         const results = await window.addJSONItemToFiles(filePaths, objectPath, key, value);
@@ -303,10 +579,10 @@ async function performMassUpdate() {
         
         // Show results
         if (errorCount === 0) {
-            showMessage(`✅ Successfully updated ${successCount} files with key "${key}"`, 'success');
+            showMessage(`✅ Successfully added "${key}" to ${successCount} files`, 'success');
         } else {
-            showMessage(`⚠️ Updated ${successCount} files, ${errorCount} failed. Check console for details.`, 'error');
-            console.error('Mass update errors:', errors);
+            showMessage(`⚠️ Added to ${successCount} files, ${errorCount} failed. Check console for details.`, 'error');
+            console.error('Add property errors:', errors);
         }
         
         // Clear and close form
@@ -315,19 +591,165 @@ async function performMassUpdate() {
         document.getElementById('mass-value').value = '';
         toggleMassUpdateForm();
         
+        // Clear the search filter inputs to allow for a fresh search
+        document.getElementById('fileExtension').value = '';
+        document.getElementById('jsonKeyFilter').value = '';
+        
     } catch (error) {
         showMessage('❌ Error during mass update: ' + error.message, 'error');
     }
 }
 
-// Set default folder path from environment variable or default
-document.addEventListener('DOMContentLoaded', async function () {
-    try {
-        const basePath = await getBasePath();
-        document.getElementById('folderPath').value = basePath;
-        showMessage('Base path loaded from config.env: ' + basePath, 'success');
-    } catch (error) {
-        showMessage('Could not load base path from config.env. Please check the file.', 'error');
-        document.getElementById('folderPath').value = 'Please configure config.env';
+// Insert after functionality
+function toggleInsertAfterForm() {
+    const form = document.getElementById('insert-after-form');
+    const isVisible = form.style.display === 'block';
+    
+    if (isVisible) {
+        form.style.display = 'none';
+    } else {
+        form.style.display = 'block';
+        
+        // Auto-populate target key from JSON key filter
+        const jsonKeyFilter = document.getElementById('jsonKeyFilter').value.trim();
+        const targetKeyInput = document.getElementById('target-object-key');
+        if (jsonKeyFilter && targetKeyInput) {
+            targetKeyInput.value = jsonKeyFilter;
+        }
+        
+        // Focus on the first input
+        const firstInput = form.querySelector('input');
+        if (firstInput) {
+            firstInput.focus();
+        }
+        
+        // Hide mass update form if open
+        const massUpdateForm = document.getElementById('mass-update-form');
+        if (massUpdateForm && massUpdateForm.style.display === 'block') {
+            massUpdateForm.style.display = 'none';
+        }
     }
-}); 
+}
+
+async function performInsertAfter() {
+    const targetKey = document.getElementById('target-object-key').value.trim();
+    const newObjectKey = document.getElementById('new-object-key').value.trim();
+    const newObjectJSON = document.getElementById('new-object-json').value.trim();
+
+    if (!targetKey || !newObjectKey || !newObjectJSON) {
+        showMessage('❌ Please fill in all fields', 'error');
+        return;
+    }
+
+    try {
+        // Validate JSON
+        JSON.parse(newObjectJSON);
+        
+        // Get selected file paths
+        const selectedFiles = getSelectedFiles();
+        const filePaths = selectedFiles.map(file => file.path);
+        
+        if (filePaths.length === 0) {
+            showMessage('❌ No files selected for update', 'error');
+            return;
+        }
+
+        // Show progress message
+        showMessage(`➕ Adding "${newObjectKey}" after all occurrences of "${targetKey}" in ${filePaths.length} files...`, 'info');
+        
+        // Call the backend function
+        const results = await window.addJSONItemAfter(filePaths, targetKey, newObjectKey, newObjectJSON);
+        
+        // Process results
+        let successCount = 0;
+        let errorCount = 0;
+        const errors = [];
+        const successDetails = [];
+        
+        for (const [filePath, result] of Object.entries(results)) {
+            if (result === 'SUCCESS') {
+                successCount++;
+                successDetails.push(filePath);
+            } else {
+                errorCount++;
+                errors.push(`${filePath}: ${result}`);
+            }
+        }
+        
+        // Show results with more detailed feedback
+        if (errorCount === 0) {
+            showMessage(`✅ Successfully added "${newObjectKey}" after all occurrences of "${targetKey}" in ${successCount} files`, 'success');
+            console.log('Successfully processed files:', successDetails);
+        } else {
+            showMessage(`⚠️ Added to ${successCount} files, ${errorCount} failed. Check console for details.`, 'error');
+            console.error('Insert after errors:', errors);
+            if (successCount > 0) {
+                console.log('Successfully processed files:', successDetails);
+            }
+        }
+        
+        // Clear and close form
+        document.getElementById('target-object-key').value = '';
+        document.getElementById('new-object-key').value = '';
+        document.getElementById('new-object-json').value = '';
+        toggleInsertAfterForm();
+        
+        // Clear the search filter inputs to allow for a fresh search
+        document.getElementById('fileExtension').value = '';
+        document.getElementById('jsonKeyFilter').value = '';
+        
+    } catch (error) {
+        showMessage('❌ Error during insert after: ' + error.message, 'error');
+    }
+}
+
+// Show toast messages using Toastify
+function showMessage(message, type = 'info') {
+    // Convert message to string if it's not already
+    const messageStr = String(message);
+    
+    // Map our types to Toastify styles
+    const toastConfig = {
+        text: messageStr,
+        duration: 4000,
+        close: true,
+        gravity: "top",
+        position: "right",
+        stopOnFocus: true,
+    };
+    
+    // Set colors based on message type
+    switch (type) {
+        case 'success':
+            toastConfig.style = {
+                background: "linear-gradient(to right, #00b09b, #96c93d)",
+            };
+            break;
+        case 'error':
+            toastConfig.style = {
+                background: "linear-gradient(to right, #ff5f6d, #ffc371)",
+            };
+            toastConfig.duration = 6000; // Keep error messages longer
+            break;
+        case 'warning':
+            toastConfig.style = {
+                background: "linear-gradient(to right, #f093fb, #f5576c)",
+            };
+            break;
+        case 'info':
+        default:
+            toastConfig.style = {
+                background: "linear-gradient(to right, #4facfe, #00f2fe)",
+            };
+            break;
+    }
+    
+    // Show the toast
+    Toastify(toastConfig).showToast();
+    
+    // Also log to console for debugging
+    console.log(`[${type.toUpperCase()}] ${messageStr}`);
+}
+
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', initializeApp); 

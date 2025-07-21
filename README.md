@@ -1,10 +1,11 @@
-# 🌟 Golden Magic - Advanced JSON File Explorer & Editor
+# ✨ goldenMagic - Advanced JSON File Explorer & Editor
 
 A powerful desktop application built with Go and the Lorca framework that provides advanced JSON file exploration, filtering, and mass editing capabilities with a beautiful web-based interface.
 
 ## ✨ Key Features
 
 ### 🔍 **Advanced File Discovery**
+- **Multi-Path Search**: Search across multiple directories simultaneously
 - **Tree Structure Display**: Hierarchical view of folders and files
 - **Dual Filtering System**: Filter by file extension AND JSON content
 - **Deep JSON Key Search**: Find files containing specific keys at any nesting level
@@ -19,6 +20,7 @@ A powerful desktop application built with Go and the Lorca framework that provid
 
 ### 🚀 **Mass Update Operations**
 - **Bulk JSON Editing**: Add properties to all filtered files at once
+- **Insert After Object**: Add complete JSON objects after specified target objects
 - **Context-Aware Paths**: Smart object path detection and auto-completion
 - **Structure Preservation**: Maintains original file formatting and key order
 - **Progress Tracking**: Real-time feedback on bulk operations
@@ -130,10 +132,56 @@ When adding values in mass update operations, use proper JSON formatting:
 - **Key**: `"status"`
 - **Value**: `"active"`
 
+### Array of Objects Update
+- **Object Path**: `"users"` (array containing objects)
+- **Key**: `"isActive"`
+- **Value**: `true`
+- **Result**: Adds `"isActive": true` as the first property in each user object
+- **Note**: Will fail if any object already contains the key
+
+### Array of Values Update
+- **Object Path**: `"tags"` (array containing strings/numbers)
+- **Key**: Not used for value arrays
+- **Value**: `"urgent"`
+- **Result**: Adds `"urgent"` as the first element in the tags array
+- **Note**: Allows duplicate values (no validation)
+
 ### Complex Data Addition
 - **Object Path**: `"metadata"`
 - **Key**: `"tags"`
 - **Value**: `["production", "verified", "v2.0"]`
+
+## ➕ Insert After Object Examples
+
+### Simple Object Insertion
+- **Target Object Key**: `"user"` (existing object to insert after)
+- **New Object Key**: `"settings"`
+- **New Object JSON**: `{"theme": "dark", "notifications": true}`
+- **Result**: Adds complete settings object after the user object
+
+### Complex Object Insertion
+- **Target Object Key**: `"database"`
+- **New Object Key**: `"cache"`
+- **New Object JSON**: `{"redis": {"host": "localhost", "port": 6379}, "ttl": 3600}`
+- **Result**: Inserts a complete cache configuration object after database config
+
+## 🔒 Duplicate Key Prevention
+
+The application automatically prevents duplicate keys to maintain JSON integrity:
+
+### ✅ **Protected Operations:**
+- **Root Level**: Won't add keys that already exist at the root
+- **Nested Objects**: Won't add keys that already exist in target objects  
+- **Array Objects**: Won't add keys if ANY object in the array already has that key
+
+### ⚠️ **Error Messages:**
+- `"key 'status' already exists at root level"`
+- `"key 'isActive' already exists in object 'user'"`
+- `"key 'priority' already exists in one or more objects within array 'tasks'"`
+
+### 🔄 **Allowed Operations:**
+- **Array Values**: Duplicate values are allowed in value arrays
+- **Different Contexts**: Same key name can exist in different objects/arrays
 
 ## 🏗️ Project Structure
 

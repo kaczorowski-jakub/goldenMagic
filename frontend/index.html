@@ -4,26 +4,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON File Manager</title>
+    <title>goldenMagic - Multiple Paths</title>
     <link rel="stylesheet" href="css/styles.css">
+    <!-- Toastify CSS -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
 </head>
 
 <body>
     <div class="container">
-        <div class="header">
-            <h1>🌟 JSON File Manager</h1>
-            <p>Browse, edit, and manage JSON files with ease</p>
-        </div>
+        <header class="header">
+            <h1>✨ goldenMagic</h1>
+            <p class="subtitle">Search and manage JSON files across multiple directories</p>
+        </header>
 
-        <div class="main-content">
-            <div class="folder-section">
-                <div class="path-info">
-                    <label for="folderPath"><strong>Base Path:</strong></label>
-                    <p class="path-description">Current path is loaded from config.env file. To change it, edit the
-                        JSON_MANAGER_BASE_PATH value in config.env and restart the application.</p>
-                    <input type="text" id="folderPath" readonly />
-                </div>
 
+
+        <!-- Base Paths Section -->
+        <section class="paths-section">
+            <div class="section-header">
+                <h2>📁 Configured Base Paths (<span id="paths-count">0</span>)</h2>
+                <p class="section-description">
+                    Files will be searched across all configured paths. Update paths in <code>config.env</code>
+                </p>
+            </div>
+            <div id="base-paths-list" class="base-paths-container">
+                <div class="loading">Loading paths...</div>
+            </div>
+        </section>
+
+        <!-- Search Filters Section -->
+        <section class="filters-section">
+            <div class="section-header">
+                <h2>🔧 Search Filters</h2>
+                <p class="section-description">Configure your search criteria</p>
+            </div>
+            
+            <div class="filters-grid">
                 <div class="filter-section">
                     <label for="fileExtension"><strong>File Extension Filter:</strong></label>
                     <input type="text" id="fileExtension" list="extensionOptions"
@@ -32,32 +48,51 @@
                         <option value="*.golden">Golden files</option>
                         <option value="*.json">JSON files</option>
                     </datalist>
-                    <p class="filter-description">Select from dropdown or type custom extensions. Leave empty for all
-                        files.</p>
+                    <p class="filter-description">Select from dropdown or type custom extensions. Leave empty for all files.</p>
                 </div>
 
                 <div class="filter-section">
                     <label for="jsonKeyFilter"><strong>JSON Key Filter:</strong></label>
                     <input type="text" id="jsonKeyFilter" 
                         placeholder="Filter by JSON key name (e.g., 'name', 'id', 'config')" />
-                    <p class="filter-description">Only show files that contain the specified JSON key. Leave empty to show all files.</p>
-                </div>
-
-                <div class="search-section">
-                    <button class="btn btn-primary" onclick="searchFiles()">🔍 Search Files</button>
-                </div>
-
-                <div id="message"></div>
-            </div>
-
-            <div id="filesContainer">
-                <div class="loading">
-                    <p>📁 Configure your base path in config.env and click "Search Files" to get started</p>
+                    <p class="filter-description">Find files containing the specified JSON key at any depth (objects and arrays). Leave empty to show all files.</p>
                 </div>
             </div>
-        </div>
+
+            <div class="search-section">
+                <button id="searchBtn" class="btn btn-primary search-btn">
+                    🔍 Search All Paths
+                </button>
+            </div>
+        </section>
+
+        <!-- Results Section -->
+        <section class="results-section">
+            <div id="results" class="results-container">
+                <div class="welcome-message">
+                    <h3>👋 Welcome to goldenMagic!</h3>
+                    <p>Configure your search filters above and click "Search All Paths" to find JSON files across all configured directories.</p>
+                    <ul class="feature-list">
+                        <li>🔍 <strong>Multi-Path Search:</strong> Search across multiple directories simultaneously</li>
+                        <li>📁 <strong>Tree View:</strong> Navigate results in a hierarchical folder structure</li>
+                        <li>✅ <strong>Bulk Operations:</strong> Select files and perform mass updates</li>
+                        <li>🎯 <strong>Smart Filtering:</strong> Filter by file extension and JSON keys</li>
+                        <li>📝 <strong>JSON Editing:</strong> Add properties and objects to multiple files at once</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- File Content Display -->
+        <section class="content-section">
+            <div id="file-content" class="file-content-container" style="display: none;">
+                <!-- File content will be displayed here -->
+            </div>
+        </section>
     </div>
 
+    <!-- Toastify JS -->
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script src="js/app.js"></script>
 </body>
 
