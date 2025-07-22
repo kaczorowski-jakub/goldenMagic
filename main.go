@@ -131,7 +131,7 @@ func (a *App) BrowseFolder(extensionFilter, jsonKeyFilter string) (*tree.FileTre
 	validBasePaths := a.config.GetValidBasePaths()
 	if len(validBasePaths) == 0 {
 		err := fmt.Errorf("no valid base paths configured")
-		a.logOperation("BrowseFolder", time.Since(start), err, map[string]interface{}{
+		a.logOperation("BrowseFolder", time.Since(start), err, map[string]any{
 			"extensionFilter": extensionFilter,
 			"jsonKeyFilter":   jsonKeyFilter,
 		})
@@ -144,7 +144,7 @@ func (a *App) BrowseFolder(extensionFilter, jsonKeyFilter string) (*tree.FileTre
 
 	files, err := fileops.BrowseFolders(validBasePaths, extensionFilter, jsonKeyFilter)
 	if err != nil {
-		a.logOperation("BrowseFolder", time.Since(start), err, map[string]interface{}{
+		a.logOperation("BrowseFolder", time.Since(start), err, map[string]any{
 			"extensionFilter": extensionFilter,
 			"jsonKeyFilter":   jsonKeyFilter,
 			"basePaths":       validBasePaths,
@@ -154,7 +154,7 @@ func (a *App) BrowseFolder(extensionFilter, jsonKeyFilter string) (*tree.FileTre
 
 	result := tree.BuildFileTreeFromMultiplePaths(files, validBasePaths)
 
-	a.logOperation("BrowseFolder", time.Since(start), nil, map[string]interface{}{
+	a.logOperation("BrowseFolder", time.Since(start), nil, map[string]any{
 		"extensionFilter": extensionFilter,
 		"jsonKeyFilter":   jsonKeyFilter,
 		"filesFound":      len(files),
@@ -172,7 +172,7 @@ func (a *App) GetJSONFileContent(filePath string) (string, error) {
 
 	content, err := fileops.GetJSONFileContent(filePath)
 
-	a.logOperation("GetJSONFileContent", time.Since(start), err, map[string]interface{}{
+	a.logOperation("GetJSONFileContent", time.Since(start), err, map[string]any{
 		"filePath":      filePath,
 		"contentLength": len(content),
 	})
