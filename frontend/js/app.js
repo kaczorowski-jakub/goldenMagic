@@ -202,29 +202,32 @@ function displayFileTree(tree) {
                     </label>
                 </div>
                 <div class="action-buttons">
-                    <button id="mass-update-btn" class="action-btn primary" onclick="toggleMassUpdateForm()">
-                        Add to Selected
+                    <button id="add-json-item-to-btn" class="action-btn add-operation" onclick="toggleAddJSONItemToForm()">
+                        ➕ Add to Selected
                     </button>
-                    <button id="insert-after-btn" class="action-btn secondary" onclick="toggleInsertAfterForm()">
-                        Add after Selected
+                    <button id="insert-after-btn" class="action-btn insert-operation" onclick="toggleInsertAfterForm()">
+                        📝 Add after Selected
+                    </button>
+                    <button id="replace-key-btn" class="action-btn replace-operation" onclick="toggleReplaceKeyForm()">
+                        🔄 Replace Key
                     </button>
                 </div>
             </div>
         </div>
-        <div id="mass-update-form" class="mass-update-form" style="display: none;">
+        <div id="add-json-item-to-form" class="add-json-item-to-form" style="display: none;">
             <h4>➕ Add Property to Selected Files</h4>
             <div class="form-row">
-                <input type="text" id="mass-object-path" placeholder="Object path (e.g., user.address or leave empty for root)" />
-                <input type="text" id="mass-key" placeholder="Key name" />
+                <input type="text" id="add-json-object-path" placeholder="Object path (e.g., user.address or leave empty for root)" />
+                <input type="text" id="add-json-key" placeholder="Key name" />
             </div>
             <p class="form-help">💡 This will add the property as the FIRST item in the target objects.</p>
-            <textarea id="mass-value" placeholder="Value (JSON format, e.g., &quot;string&quot;, 123, {&quot;nested&quot;: true})"></textarea>
-            <div class="mass-update-buttons">
-                <button id="perform-mass-update" class="btn btn-primary">➕ Add to Selected Files</button>
-                <button id="cancel-mass-update" class="btn">Cancel</button>
+            <textarea id="add-json-value" placeholder="Value (JSON format, e.g., &quot;string&quot;, 123, {&quot;nested&quot;: true})"></textarea>
+            <div class="add-json-item-to-buttons">
+                <button id="perform-add-json-item-to" class="btn btn-primary">➕ Add to Selected Files</button>
+                <button id="cancel-add-json-item-to" class="btn">Cancel</button>
             </div>
         </div>
-        <div id="insert-after-form" class="mass-update-form" style="display: none;">
+        <div id="insert-after-form" class="add-json-item-to-form" style="display: none;">
             <h4>📝 Add Object After Target</h4>
             <div class="form-row">
                 <input type="text" id="target-object-key" placeholder="Target object key (to insert after)" />
@@ -232,9 +235,21 @@ function displayFileTree(tree) {
             </div>
             <p class="form-help">💡 This will add a complete JSON object AFTER ALL OCCURRENCES of the specified target key. If the target key appears multiple times in a file, the new object will be added after each occurrence.</p>
             <textarea id="new-object-json" placeholder="New object JSON (e.g., {&quot;name&quot;: &quot;value&quot;, &quot;nested&quot;: {&quot;key&quot;: true}})"></textarea>
-            <div class="mass-update-buttons">
+            <div class="add-json-item-to-buttons">
                 <button id="perform-insert-after" class="btn btn-primary">📝 Add After Target</button>
                 <button id="cancel-insert-after" class="btn">Cancel</button>
+            </div>
+        </div>
+        <div id="replace-key-form" class="add-json-item-to-form" style="display: none;">
+            <h4>🔄 Replace Key in Selected Files</h4>
+            <div class="form-row">
+                <input type="text" id="old-key-name" placeholder="Old key name (to be replaced)" />
+                <input type="text" id="new-key-name" placeholder="New key name (replacement)" />
+            </div>
+            <p class="form-help">💡 This will rename all occurrences of the old key to the new key in the selected files using simple text replacement.</p>
+            <div class="add-json-item-to-buttons">
+                <button id="perform-replace-key" class="btn btn-primary">🔄 Replace Key</button>
+                <button id="cancel-replace-key" class="btn">Cancel</button>
             </div>
         </div>
     `;
@@ -283,9 +298,9 @@ function handleInlineCopyClick(event) {
 
 // Set up form event listeners
 function setupFormEventListeners() {
-    const performMassUpdateBtn = document.getElementById('perform-mass-update');
-    if (performMassUpdateBtn) {
-        performMassUpdateBtn.addEventListener('click', performMassUpdate);
+    const performAddJSONItemToBtn = document.getElementById('perform-add-json-item-to');
+    if (performAddJSONItemToBtn) {
+        performAddJSONItemToBtn.addEventListener('click', performAddJSONItemTo);
     }
     
     const performInsertAfterBtn = document.getElementById('perform-insert-after');
@@ -293,14 +308,24 @@ function setupFormEventListeners() {
         performInsertAfterBtn.addEventListener('click', performInsertAfter);
     }
     
-    const cancelMassUpdateBtn = document.getElementById('cancel-mass-update');
-    if (cancelMassUpdateBtn) {
-        cancelMassUpdateBtn.addEventListener('click', toggleMassUpdateForm);
+    const cancelAddJSONItemToBtn = document.getElementById('cancel-add-json-item-to');
+    if (cancelAddJSONItemToBtn) {
+        cancelAddJSONItemToBtn.addEventListener('click', toggleAddJSONItemToForm);
     }
     
     const cancelInsertAfterBtn = document.getElementById('cancel-insert-after');
     if (cancelInsertAfterBtn) {
         cancelInsertAfterBtn.addEventListener('click', toggleInsertAfterForm);
+    }
+    
+    const performReplaceKeyBtn = document.getElementById('perform-replace-key');
+    if (performReplaceKeyBtn) {
+        performReplaceKeyBtn.addEventListener('click', performReplaceKey);
+    }
+    
+    const cancelReplaceKeyBtn = document.getElementById('cancel-replace-key');
+    if (cancelReplaceKeyBtn) {
+        cancelReplaceKeyBtn.addEventListener('click', toggleReplaceKeyForm);
     }
 }
 
@@ -654,9 +679,9 @@ async function copyJsonToClipboard(filePath) {
     }
 }
 
-// Mass update functionality
-function toggleMassUpdateForm() {
-    const form = document.getElementById('mass-update-form');
+// Add JSON item functionality
+function toggleAddJSONItemToForm() {
+    const form = document.getElementById('add-json-item-to-form');
     const isVisible = form.style.display === 'block';
     
     if (isVisible) {
@@ -666,7 +691,7 @@ function toggleMassUpdateForm() {
         
         // Auto-populate object path from JSON key filter
         const jsonKeyFilter = document.getElementById('jsonKeyFilter').value.trim();
-        const objectPathInput = document.getElementById('mass-object-path');
+        const objectPathInput = document.getElementById('add-json-object-path');
         if (jsonKeyFilter && objectPathInput) {
             objectPathInput.value = jsonKeyFilter;
         }
@@ -682,13 +707,19 @@ function toggleMassUpdateForm() {
         if (insertAfterForm && insertAfterForm.style.display === 'block') {
             insertAfterForm.style.display = 'none';
         }
+        
+        // Hide replace key form if open
+        const replaceKeyForm = document.getElementById('replace-key-form');
+        if (replaceKeyForm && replaceKeyForm.style.display === 'block') {
+            replaceKeyForm.style.display = 'none';
+        }
     }
 }
 
-async function performMassUpdate() {
-    const objectPath = document.getElementById('mass-object-path').value.trim();
-    const key = document.getElementById('mass-key').value.trim();
-    const valueStr = document.getElementById('mass-value').value.trim();
+async function performAddJSONItemTo() {
+    const objectPath = document.getElementById('add-json-object-path').value.trim();
+    const key = document.getElementById('add-json-key').value.trim();
+    const valueStr = document.getElementById('add-json-value').value.trim();
 
     if (!key || !valueStr) {
         showMessage('❌ Please enter both key and value', 'error');
@@ -737,17 +768,17 @@ async function performMassUpdate() {
         }
         
         // Clear and close form
-        document.getElementById('mass-object-path').value = '';
-        document.getElementById('mass-key').value = '';
-        document.getElementById('mass-value').value = '';
-        toggleMassUpdateForm();
+        document.getElementById('add-json-object-path').value = '';
+        document.getElementById('add-json-key').value = '';
+        document.getElementById('add-json-value').value = '';
+        toggleAddJSONItemToForm();
         
         // Clear the search filter inputs to allow for a fresh search
         document.getElementById('fileExtension').value = '';
         document.getElementById('jsonKeyFilter').value = '';
         
     } catch (error) {
-        showMessage('❌ Error during mass update: ' + error.message, 'error');
+        showMessage('❌ Error during adding JSON Item to: ' + error.message, 'error');
     }
 }
 
@@ -774,11 +805,134 @@ function toggleInsertAfterForm() {
             firstInput.focus();
         }
         
-        // Hide mass update form if open
-        const massUpdateForm = document.getElementById('mass-update-form');
-        if (massUpdateForm && massUpdateForm.style.display === 'block') {
-            massUpdateForm.style.display = 'none';
+        // Hide add JSON item form if open
+        const addJSONItemToForm = document.getElementById('add-json-item-to-form');
+        if (addJSONItemToForm && addJSONItemToForm.style.display === 'block') {
+            addJSONItemToForm.style.display = 'none';
         }
+        
+        // Hide replace key form if open
+        const replaceKeyForm = document.getElementById('replace-key-form');
+        if (replaceKeyForm && replaceKeyForm.style.display === 'block') {
+            replaceKeyForm.style.display = 'none';
+        }
+    }
+}
+
+function toggleReplaceKeyForm() {
+    const form = document.getElementById('replace-key-form');
+    const isVisible = form.style.display === 'block';
+    
+    if (isVisible) {
+        form.style.display = 'none';
+    } else {
+        form.style.display = 'block';
+        
+        // Auto-populate old key name from JSON key filter
+        const jsonKeyFilter = document.getElementById('jsonKeyFilter').value.trim();
+        const oldKeyInput = document.getElementById('old-key-name');
+        if (jsonKeyFilter && oldKeyInput) {
+            oldKeyInput.value = jsonKeyFilter;
+        }
+        
+        // Focus on the first input
+        const firstInput = form.querySelector('input');
+        if (firstInput) {
+            firstInput.focus();
+        }
+        
+        // Hide add JSON item form if open
+        const addJSONItemToForm = document.getElementById('add-json-item-to-form');
+        if (addJSONItemToForm && addJSONItemToForm.style.display === 'block') {
+            addJSONItemToForm.style.display = 'none';
+        }
+        
+        // Hide insert after form if open
+        const insertAfterForm = document.getElementById('insert-after-form');
+        if (insertAfterForm && insertAfterForm.style.display === 'block') {
+            insertAfterForm.style.display = 'none';
+        }
+    }
+}
+
+async function performReplaceKey() {
+    const oldKeyName = document.getElementById('old-key-name').value.trim();
+    const newKeyName = document.getElementById('new-key-name').value.trim();
+
+    if (!oldKeyName || !newKeyName) {
+        showMessage('❌ Please enter both old and new key names', 'error');
+        return;
+    }
+
+    if (oldKeyName === newKeyName) {
+        showMessage('❌ Old key and new key cannot be the same', 'error');
+        return;
+    }
+
+    try {
+        // Get selected file paths
+        const selectedFiles = getSelectedFiles();
+        if (selectedFiles.length === 0) {
+            showMessage('❌ Please select at least one file', 'error');
+            return;
+        }
+
+        const filePaths = selectedFiles.map(file => file.path);
+
+        // Show progress message
+        showMessage(`🔄 Replacing "${oldKeyName}" with "${newKeyName}" in ${filePaths.length} files...`, 'info');
+        
+        // Call the backend function
+        const results = await window.replaceKeys(oldKeyName, newKeyName, filePaths);
+        
+        // Process results
+        let successCount = 0;
+        let errorCount = 0;
+        let totalReplacements = 0;
+        const errors = [];
+        const successDetails = [];
+
+        for (const result of results) {
+            if (result.success) {
+                successCount++;
+                totalReplacements += result.replacementCount;
+                successDetails.push({
+                    filePath: result.filePath,
+                    replacements: result.replacementCount
+                });
+            } else {
+                errorCount++;
+                errors.push({ 
+                    filePath: result.filePath, 
+                    error: result.error 
+                });
+            }
+        }
+
+        // Show results with more detailed feedback
+        if (errorCount === 0) {
+            showMessage(`✅ Successfully replaced "${oldKeyName}" with "${newKeyName}" in ${successCount} files (${totalReplacements} total replacements)`, 'success');
+            console.log('Successfully processed files:', successDetails);
+        } else {
+            showMessage(`⚠️ Replaced in ${successCount} files, ${errorCount} failed. Check console for details.`, 'error');
+            console.error('Replace key errors:', errors);
+            if (successCount > 0) {
+                console.log('Successfully processed files:', successDetails);
+            }
+        }
+        
+        // Clear and close form
+        document.getElementById('old-key-name').value = '';
+        document.getElementById('new-key-name').value = '';
+        toggleReplaceKeyForm();
+        
+        // Clear the search filter inputs to allow for a fresh search
+        document.getElementById('fileExtension').value = '';
+        document.getElementById('jsonKeyFilter').value = '';
+        
+    } catch (error) {
+        console.error('Error in performReplaceKey:', error);
+        showMessage('❌ Error during replace key: ' + error.message, 'error');
     }
 }
 
@@ -801,7 +955,7 @@ async function performInsertAfter() {
         const filePaths = selectedFiles.map(file => file.path);
         
         if (filePaths.length === 0) {
-            showMessage('❌ No files selected for update', 'error');
+            showMessage('❌ Please select at least one file', 'error');
             return;
         }
 
@@ -816,17 +970,17 @@ async function performInsertAfter() {
         let errorCount = 0;
         const errors = [];
         const successDetails = [];
-        
+
         for (const [filePath, result] of Object.entries(results)) {
             if (result === 'SUCCESS') {
                 successCount++;
                 successDetails.push(filePath);
             } else {
                 errorCount++;
-                errors.push(`${filePath}: ${result}`);
+                errors.push({ filePath, error: result });
             }
         }
-        
+
         // Show results with more detailed feedback
         if (errorCount === 0) {
             showMessage(`✅ Successfully added "${newObjectKey}" after all occurrences of "${targetKey}" in ${successCount} files`, 'success');
@@ -846,7 +1000,7 @@ async function performInsertAfter() {
         toggleInsertAfterForm();
         
         // Clear the search filter inputs to allow for a fresh search
-        document.getElementById('fileExtension').value = '';
+        document.getElementById('fileExtFilter').value = '';
         document.getElementById('jsonKeyFilter').value = '';
         
     } catch (error) {

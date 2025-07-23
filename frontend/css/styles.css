@@ -366,6 +366,33 @@ section {
     background: #4b5563;
 }
 
+.action-btn.add-operation {
+    background: #10b981;
+    color: white;
+}
+
+.action-btn.add-operation:hover {
+    background: #059669;
+}
+
+.action-btn.insert-operation {
+    background: #3b82f6;
+    color: white;
+}
+
+.action-btn.insert-operation:hover {
+    background: #2563eb;
+}
+
+.action-btn.replace-operation {
+    background: #f59e0b;
+    color: white;
+}
+
+.action-btn.replace-operation:hover {
+    background: #d97706;
+}
+
 /* Tree Container */
 .tree-container {
     border: 1px solid #e5e7eb;
@@ -480,8 +507,8 @@ section {
     white-space: nowrap;
 }
 
-/* Mass Update Forms */
-.mass-update-form {
+/* Add JSON Item to Forms */
+.add-json-item-to-form {
     background: #f8fafc;
     border: 1px solid #e5e7eb;
     border-radius: 8px;
@@ -489,7 +516,7 @@ section {
     margin: 15px 0;
 }
 
-.mass-update-form h4 {
+.add-json-item-to-form h4 {
     color: #374151;
     margin-bottom: 15px;
     font-size: 1.1em;
@@ -526,7 +553,7 @@ section {
     line-height: 1.4;
 }
 
-.mass-update-form textarea {
+.add-json-item-to-form textarea {
     width: 100%;
     min-height: 80px;
     padding: 10px 12px;
@@ -538,13 +565,13 @@ section {
     margin-bottom: 15px;
 }
 
-.mass-update-form textarea:focus {
+.add-json-item-to-form textarea:focus {
     outline: none;
     border-color: #3b82f6;
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
 }
 
-.mass-update-buttons {
+.add-json-item-to-buttons {
     display: flex;
     gap: 10px;
     flex-wrap: wrap;

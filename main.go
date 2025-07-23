@@ -98,6 +98,7 @@ func main() {
 	ui.Bind("getJSONFileContent", app.GetJSONFileContent)
 	ui.Bind("addJSONItemToFiles", app.AddJSONItemToFiles)
 	ui.Bind("addJSONItemAfter", app.AddJSONItemAfter)
+	ui.Bind("replaceKeys", app.ReplaceKeys)
 	ui.Bind("getBasePaths", app.GetBasePaths)
 
 	// Wait for interrupt signal
@@ -191,12 +192,28 @@ func (a *App) AddJSONItemToFiles(filePaths []string, objectPath, key string, val
 	results := make(map[string]string)
 
 	for _, filePath := range filePaths {
-		err := a.addJSONItemToSingleFile(filePath, objectPath, key, value)
+		// Read existing file
+		content, err := fileops.ReadFile(filePath)
 		if err != nil {
-			results[filePath] = "ERROR: " + err.Error()
-		} else {
-			results[filePath] = "SUCCESS"
+			results[filePath] = "ERROR: error reading file: " + err.Error()
+			continue
 		}
+
+		// Insert the JSON key-value pair while preserving structure
+		updatedContent, err := jsonops.InsertJSONKeyValue(string(content), objectPath, key, value)
+		if err != nil {
+			results[filePath] = "ERROR: error inserting JSON: " + err.Error()
+			continue
+		}
+
+		// Write updated content back to file
+		err = fileops.WriteFile(filePath, []byte(updatedContent))
+		if err != nil {
+			results[filePath] = "ERROR: error writing file: " + err.Error()
+			continue
+		}
+
+		results[filePath] = "SUCCESS"
 	}
 
 	return results
@@ -267,25 +284,33 @@ func (a *App) GetBasePathInfo() (map[string]interface{}, error) {
 	return info, nil
 }
 
-// addJSONItemToSingleFile adds a new JSON item to a single file while preserving structure
-func (a *App) addJSONItemToSingleFile(filePath, objectPath, key string, value any) error {
-	// Read existing file
-	content, err := fileops.ReadFile(filePath)
-	if err != nil {
-		return fmt.Errorf("error reading file: %v", err)
+// ReplaceKeys replaces old keys with new keys in selected files using string replacement
+func (a *App) ReplaceKeys(oldKey, newKey string, selectedFiles []string) ([]jsonops.ReplaceKeyResult, error) {
+	log.Printf("🔄 Starting key replace operation: oldKey=%s, newKey=%s, files=%d", oldKey, newKey, len(selectedFiles))
+
+	request := jsonops.ReplaceKeyRequest{
+		OldKey:        oldKey,
+		NewKey:        newKey,
+		SelectedFiles: selectedFiles,
 	}
 
-	// Insert the JSON key-value pair while preserving structure
-	updatedContent, err := jsonops.InsertJSONKeyValue(string(content), objectPath, key, value)
+	results, err := jsonops.ReplaceKeyInFiles(request)
 	if err != nil {
-		return fmt.Errorf("error inserting JSON: %v", err)
+		log.Printf("❌ Replace operation failed: %v", err)
+		return nil, err
 	}
 
-	// Write updated content back to file
-	err = fileops.WriteFile(filePath, []byte(updatedContent))
-	if err != nil {
-		return fmt.Errorf("error writing file: %v", err)
+	successCount := 0
+	totalReplacements := 0
+	for _, result := range results {
+		if result.Success {
+			successCount++
+			totalReplacements += result.ReplacementCount
+		}
 	}
 
-	return nil
+	log.Printf("✅ Replace operation completed: %d/%d files successful, %d total replacements",
+		successCount, len(selectedFiles), totalReplacements)
+
+	return results, nil
 }

@@ -18,9 +18,10 @@ A powerful desktop application built with Go and the Lorca framework that provid
 - **File Statistics**: Properties count, lines, and file size
 - **Structure Preservation**: Maintains original formatting and key order
 
-### 🚀 **Mass Update Operations**
+### 🚀 **Add JSON Item Operations**
 - **Bulk JSON Editing**: Add properties to all filtered files at once
 - **Insert After Object**: Add complete JSON objects after specified target objects
+- **Replace Keys**: Rename JSON keys across multiple files using text replacement
 - **Context-Aware Paths**: Smart object path detection and auto-completion
 - **Structure Preservation**: Maintains original file formatting and key order
 - **Progress Tracking**: Real-time feedback on bulk operations
@@ -74,8 +75,8 @@ The application will open in a new window with a modern web interface.
 - **File Count**: Shows total matching files
 - **View Content**: Click "View" to see beautifully formatted JSON with syntax highlighting
 
-### 3. **Mass Update Operations**
-- **Access**: Click "📝 Mass Update All Files" button
+### 3. **Add JSON Item Operations**
+- **Access**: Use the "Add to Selected", "Add after Selected", or "Replace Key" buttons
 - **Object Path**: Auto-filled from your JSON key filter (supports context paths)
 - **Add Properties**: Specify key name and JSON value to add to all filtered files
 - **Context-Aware**: Use simple paths like "address" instead of full paths like "user.profile.address"
@@ -87,7 +88,7 @@ The application will open in a new window with a modern web interface.
 ```
 1. JSON Key Filter: "config"
 2. Search → Shows all files with "config" objects
-3. Mass Update → Auto-fills "config" as object path
+3. Add to Selected → Auto-fills "config" as object path
 4. Add: "version": "2.0" → Updates all config objects
 ```
 
@@ -95,7 +96,7 @@ The application will open in a new window with a modern web interface.
 ```
 1. JSON Key Filter: "address"  
 2. Search → Finds files with address objects anywhere
-3. Mass Update → Auto-fills "address" as context path
+3. Add to Selected → Auto-fills "address" as context path
 4. Add: "country": "USA" → Adds to all address objects regardless of nesting
 ```
 
@@ -104,12 +105,20 @@ The application will open in a new window with a modern web interface.
 1. File Extension: "*.golden"
 2. JSON Key Filter: "testData"
 3. Search → Finds .golden files containing testData
-4. Mass Update → Add test metadata to all matching files
+4. Add to Selected → Add test metadata to all matching files
+```
+
+### Example 4: Replace Keys Across Files
+```
+1. JSON Key Filter: "firstName"
+2. Search → Shows all files containing "firstName" key
+3. Replace Key → Auto-fills "firstName" as old key
+4. New Key: "first_name" → Renames all occurrences using text replacement
 ```
 
 ## 📝 JSON Value Format
 
-When adding values in mass update operations, use proper JSON formatting:
+When adding values in add JSON item operations, use proper JSON formatting:
 
 | Type | Example |
 |------|---------|
@@ -120,7 +129,7 @@ When adding values in mass update operations, use proper JSON formatting:
 | **Object** | `{"name": "John", "age": 30}` |
 | **Null** | `null` |
 
-## 💡 Mass Update Examples
+## 💡 Add JSON Item Examples
 
 ### Simple Property Addition
 - **Object Path**: `""` (root level)
@@ -165,6 +174,23 @@ When adding values in mass update operations, use proper JSON formatting:
 - **New Object JSON**: `{"redis": {"host": "localhost", "port": 6379}, "ttl": 3600}`
 - **Result**: Inserts a complete cache configuration object after database config
 
+## 🔄 Replace Key Examples
+
+### Simple Key Replacement
+- **Old Key Name**: `"firstName"` (auto-filled from JSON key filter)
+- **New Key Name**: `"first_name"`
+- **Result**: Renames all `"firstName":` to `"first_name":` using text replacement
+
+### Batch Key Standardization
+- **Old Key Name**: `"user_id"`
+- **New Key Name**: `"userId"`
+- **Result**: Updates naming convention across all selected files
+
+### Configuration Key Updates
+- **Old Key Name**: `"db_host"`
+- **New Key Name**: `"database_host"`
+- **Result**: Modernizes configuration key names while preserving all formatting
+
 ## 🔒 Duplicate Key Prevention
 
 The application automatically prevents duplicate keys to maintain JSON integrity:
@@ -206,7 +232,7 @@ goldenMagic/
 - **JSON Processing**: Advanced string-based manipulation preserving file structure
 - **Deep Search**: Recursive JSON key discovery at any nesting level
 - **File Operations**: Efficient tree-based folder scanning with filtering
-- **Mass Operations**: Bulk file processing with individual error tracking
+- **Add JSON Item Operations**: Bulk file processing with individual error tracking
 
 ## 📦 Dependencies
 
@@ -236,7 +262,7 @@ go build -o golden-magic.exe main.go
 | **Application won't start** | Ensure Chrome/Chromium is installed |
 | **Config not loading** | Check `config.env` file exists and has correct path |
 | **No files found** | Verify base path exists and contains target files |
-| **Mass update fails** | Check JSON value syntax and object path validity |
+| **Add JSON item fails** | Check JSON value syntax and object path validity |
 | **Permission errors** | Ensure read/write access to target directories |
 
 ## 🎯 Use Cases
