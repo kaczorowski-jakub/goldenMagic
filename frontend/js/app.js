@@ -965,16 +965,26 @@ async function performInsertAfter() {
         // Call the backend function
         const results = await window.addJSONItemAfter(filePaths, targetKey, newObjectKey, newObjectJSON);
         
+        // Check if results is valid
+        if (!results || typeof results !== 'object') {
+            throw new Error('Invalid response from backend: ' + String(results));
+        }
+        
         // Process results
         let successCount = 0;
         let errorCount = 0;
+        let skippedCount = 0;
         const errors = [];
         const successDetails = [];
+        const skippedDetails = [];
 
         for (const [filePath, result] of Object.entries(results)) {
             if (result === 'SUCCESS') {
                 successCount++;
                 successDetails.push(filePath);
+            } else if (typeof result === 'string' && result.startsWith('SKIPPED:')) {
+                skippedCount++;
+                skippedDetails.push({ filePath, reason: result });
             } else {
                 errorCount++;
                 errors.push({ filePath, error: result });
@@ -982,14 +992,22 @@ async function performInsertAfter() {
         }
 
         // Show results with more detailed feedback
-        if (errorCount === 0) {
+        if (errorCount === 0 && skippedCount === 0) {
             showMessage(`✅ Successfully added "${newObjectKey}" after all occurrences of "${targetKey}" in ${successCount} files`, 'success');
             console.log('Successfully processed files:', successDetails);
+        } else if (errorCount === 0 && skippedCount > 0) {
+            showMessage(`⚠️ Added to ${successCount} files, ${skippedCount} skipped (duplicates detected). Check console for details.`, 'warning');
+            console.log('Successfully processed files:', successDetails);
+            console.log('Skipped files (duplicates):', skippedDetails);
         } else {
-            showMessage(`⚠️ Added to ${successCount} files, ${errorCount} failed. Check console for details.`, 'error');
+            const totalProcessed = successCount + skippedCount;
+            showMessage(`⚠️ Processed ${totalProcessed} files (${successCount} added, ${skippedCount} skipped), ${errorCount} failed. Check console for details.`, 'error');
             console.error('Insert after errors:', errors);
             if (successCount > 0) {
                 console.log('Successfully processed files:', successDetails);
+            }
+            if (skippedCount > 0) {
+                console.log('Skipped files (duplicates):', skippedDetails);
             }
         }
         
@@ -997,11 +1015,15 @@ async function performInsertAfter() {
         document.getElementById('target-object-key').value = '';
         document.getElementById('new-object-key').value = '';
         document.getElementById('new-object-json').value = '';
+        
         toggleInsertAfterForm();
         
+        
         // Clear the search filter inputs to allow for a fresh search
-        document.getElementById('fileExtFilter').value = '';
+        document.getElementById('fileExtension').value = '';
         document.getElementById('jsonKeyFilter').value = '';
+
+        console.log("T1001")
         
     } catch (error) {
         showMessage('❌ Error during insert after: ' + error.message, 'error');

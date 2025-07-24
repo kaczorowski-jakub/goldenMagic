@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
 	"goldenMagic/internal/config"
@@ -221,32 +222,64 @@ func (a *App) AddJSONItemToFiles(filePaths []string, objectPath, key string, val
 
 // AddJSONObjectAfter adds a complete JSON object after a target object in specified files
 func (a *App) AddJSONItemAfter(filePaths []string, targetKey, newObjectKey, newObjectJSON string) map[string]string {
+	start := time.Now()
+	a.stats.UpdateOperations++
+
 	results := make(map[string]string)
 
 	for _, filePath := range filePaths {
+		a.stats.FilesProcessed++
+
 		// Read the file
 		content, err := fileops.ReadFile(filePath)
 		if err != nil {
-			results[filePath] = fmt.Sprintf("Error reading file: %v", err)
+			results[filePath] = fmt.Sprintf("ERROR: reading file: %v", err)
 			continue
 		}
 
 		// Insert the new object after the target
 		updatedContent, err := jsonops.InsertItemAfter(string(content), targetKey, newObjectKey, newObjectJSON)
 		if err != nil {
-			results[filePath] = fmt.Sprintf("Error inserting object: %v", err)
+			// Check if it's a duplicate key error
+			if strings.Contains(err.Error(), "already exists") {
+				results[filePath] = fmt.Sprintf("SKIPPED: %v", err)
+			} else {
+				results[filePath] = fmt.Sprintf("ERROR: inserting object: %v", err)
+			}
 			continue
 		}
 
 		// Write back to file
 		err = fileops.WriteFile(filePath, []byte(updatedContent))
 		if err != nil {
-			results[filePath] = fmt.Sprintf("Error writing file: %v", err)
+			results[filePath] = fmt.Sprintf("ERROR: writing file: %v", err)
 			continue
 		}
 
 		results[filePath] = "SUCCESS"
 	}
+
+	successCount := 0
+	skippedCount := 0
+	errorCount := 0
+	for _, result := range results {
+		if strings.HasPrefix(result, "SUCCESS") {
+			successCount++
+		} else if strings.HasPrefix(result, "SKIPPED") {
+			skippedCount++
+		} else {
+			errorCount++
+		}
+	}
+
+	a.logOperation("AddJSONItemAfter", time.Since(start), nil, map[string]any{
+		"targetKey":      targetKey,
+		"newObjectKey":   newObjectKey,
+		"filesProcessed": len(filePaths),
+		"successCount":   successCount,
+		"skippedCount":   skippedCount,
+		"errorCount":     errorCount,
+	})
 
 	return results
 }

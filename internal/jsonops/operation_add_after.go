@@ -3,12 +3,90 @@ package jsonops
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
+// checkIfKeyExists checks if a key already exists in the JSON at the same level as the target key
+func checkIfKeyExists(lines []string, targetKey, newObjectKey string) bool {
+	// Find all occurrences of the target key
+	for i, line := range lines {
+		// Look for the target key (accounting for quotes and colon)
+		// Use regex to match the target key pattern more precisely
+		targetKeyPattern := `"` + regexp.QuoteMeta(targetKey) + `"\s*:`
+		targetKeyRegex := regexp.MustCompile(targetKeyPattern)
+
+		if targetKeyRegex.MatchString(line) {
+			// Get the indentation level of the target key
+			targetIndentation := getIndentation(line)
+
+			// Find the object that contains this target key
+			objectStartLine := findContainingObjectStart(lines, i)
+			if objectStartLine == -1 {
+				continue
+			}
+
+			// Search within the same object for the new key
+			objectEndLine := findMatchingBracket(lines, objectStartLine, '{', '}')
+			if objectEndLine == -1 {
+				continue
+			}
+
+			// Check all lines within this object for the new key at the same indentation level
+			for j := objectStartLine + 1; j < objectEndLine; j++ {
+				objLine := lines[j]
+				objIndentation := getIndentation(objLine)
+
+				// Skip lines that are not at the same indentation level (nested objects/arrays)
+				if objIndentation != targetIndentation {
+					continue
+				}
+
+				// Use regex to check if this line contains the new key
+				newKeyPattern := `"` + regexp.QuoteMeta(newObjectKey) + `"\s*:`
+				newKeyRegex := regexp.MustCompile(newKeyPattern)
+				if newKeyRegex.MatchString(objLine) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// findContainingObjectStart finds the line index of the opening brace of the object containing the target line
+func findContainingObjectStart(lines []string, targetLineIndex int) int {
+	braceDepth := 0
+
+	// Go backwards from the target line to find the opening brace of the containing object
+	for i := targetLineIndex - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+
+		// Count braces
+		openBraces := strings.Count(line, "{")
+		closeBraces := strings.Count(line, "}")
+		braceDepth += openBraces - closeBraces
+
+		// When we find an opening brace and our depth becomes positive,
+		// we've found the start of the containing object
+		if openBraces > 0 && braceDepth > 0 {
+			return i
+		}
+	}
+
+	// If no containing object found, return -1
+	return -1
+}
+
 // InsertItemAfter adds a JSON object after all occurrences of a target key in the JSON string
+// It checks if the object already exists and skips adding duplicates
 func InsertItemAfter(jsonStr, targetKey, newObjectKey, newObjectJSON string) (string, error) {
 	lines := strings.Split(jsonStr, "\n")
+
+	// Check if the new object key already exists
+	if checkIfKeyExists(lines, targetKey, newObjectKey) {
+		return "", fmt.Errorf("object with key '%s' already exists", newObjectKey)
+	}
 
 	// Find all occurrences of the target key
 	var targetLineIndices []int
